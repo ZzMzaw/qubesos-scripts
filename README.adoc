@@ -52,7 +52,7 @@ Just execute the script with root privileges in `dom0`:
 sudo ./sync-salt-dom0-from.sh <source-domain>
 --------
 
-Get help:
+More arguments exist, look at the help for more details:
 
 [source, bash]
 --------
