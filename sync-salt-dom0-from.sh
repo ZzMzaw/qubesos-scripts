@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 
 SCRIPT_NAME=$(basename $0)
 
@@ -65,12 +65,12 @@ usage () {
 
 # \n is required to preserve whitespaces for the first line (and adding a new line before printing the usage message is a good deal)
     read -r -d '' USAGE << EOM
-\n    Usage: ${SCRIPT_NAME} <domain> [-o <object_type>] [-r <salt_root>] [-s <source>]
+\n    Usage: ${SCRIPT_NAME} <qube> [-o <object_type>] [-r <salt_root>] [-s <source>]
 
-    Copy ${YELLOW}pillars${END}, ${YELLOW}formulas${END} and/or ${YELLOW}states${END} from ${BOLD}<domain>${END} to dom0 then enable them.
+    Copy ${YELLOW}pillars${END}, ${YELLOW}formulas${END} and/or ${YELLOW}states${END} from ${BOLD}<qube>${END} to dom0 then enable them.
 
     Parameters:
-        ${BOLD}<domain>${END} must be a valid and started AppVM, as safe as possible
+        ${BOLD}<qube>${END} must be a valid and started AppVM, as safe as possible
     
     Options:
         -o|--object-type ${BOLD}<object_type>${END}
@@ -86,7 +86,7 @@ usage () {
             Must start by an alphabetic character
         
         -s|--source ${BOLD}<source>${END}
-            The path to pillars, formulas and states folders on domain ${BOLD}<domain>${END} (default: '${SRC_DIR}')
+            The path to pillars, formulas and states folders on qube ${BOLD}<qube>${END} (default: '${SRC_DIR}')
             Limited to alphanumeric, '.', '-', '_', ' ' and '/' characters
             Must start by a '/' character (absolute path)
     
@@ -113,10 +113,10 @@ fi
 
 # Retrieve mandatory arguments
 if [[ $# -ge 1 ]]; then
-    QDOMAIN=$1
+    QUBE=$1
     shift
 else
-    print_error "Missing domain" && usage && exit 1
+    print_error "Missing qube to retrieve objects from" && usage && exit 1
 fi
 
 # Look for options
@@ -166,12 +166,12 @@ if [ "${HOSTNAME}" != "dom0" ]; then
 fi
 
 # Check if domain exists and is started
-qvm-check --quiet --running "${QDOMAIN}" 2> /dev/null
+qvm-check --quiet --running "${QUBE}" 2> /dev/null
 case "$?" in
-    0) print_info "Ready to sync dom0 from '${QDOMAIN}'";;
-    1) print_error "Domain '${QDOMAIN}' is not started" && exit 1;;
-    2) print_error "Domain '${QDOMAIN}' doesn't exist" && exit 1;;
-    *) print_error "Unknown feedback '$?' from qvm-check for domain '${QDOMAIN}'" && exit 1;;
+    0) print_info "Ready to sync dom0 from '${QUBE}'";;
+    1) print_error "Qube '${QUBE}' is not started" && exit 1;;
+    2) print_error "Qube '${QUBE}' doesn't exist" && exit 1;;
+    *) print_error "Unknown feedback '$?' from qvm-check for qube '${QUBE}'" && exit 1;;
 esac
 
 # Validate OBJECT_TYPE
@@ -227,7 +227,7 @@ if [[ "${sync_pillars}" == true ]]; then
     PILLARS_SRC_DIR="${SRC_DIR}/${PILLARS_FOLDER}"
     PILLARS_ARCHIVE="${PILLARS_DST_BASE_DIR}/${SALT_ROOT}.tgz"
 
-    qvm-run --pass-io ${QDOMAIN} "tar czf - -C ${PILLARS_SRC_DIR} ${SALT_ROOT}" > "${PILLARS_ARCHIVE}"
+    qvm-run --pass-io ${QUBE} "tar czf - -C ${PILLARS_SRC_DIR} ${SALT_ROOT}" > "${PILLARS_ARCHIVE}"
     tar xzf "${PILLARS_ARCHIVE}" -C "${PILLARS_DST_BASE_DIR}" && rm "${PILLARS_ARCHIVE}"
 
     # Enable pillars
@@ -264,7 +264,7 @@ if [[ "${sync_formulas}" == true ]]; then
     FORMULAS_SRC_DIR="${SRC_DIR}/${FORMULAS_FOLDER}"
     FORMULAS_ARCHIVE="${FORMULAS_DST_DIR}/${SALT_ROOT}.tgz"
 
-    qvm-run --pass-io ${QDOMAIN} "tar czf - -C ${FORMULAS_SRC_DIR} \$(cd ${FORMULAS_SRC_DIR}; echo *-formula/${SALT_ROOT}/*)" > "${FORMULAS_ARCHIVE}"
+    qvm-run --pass-io ${QUBE} "tar czf - -C ${FORMULAS_SRC_DIR} \$(cd ${FORMULAS_SRC_DIR}; echo *-formula/${SALT_ROOT}/*)" > "${FORMULAS_ARCHIVE}"
     tar xzf "${FORMULAS_ARCHIVE}" -C "${FORMULAS_DST_DIR}" && rm "${FORMULAS_ARCHIVE}"
 
     # Enable formulas
@@ -300,7 +300,7 @@ if [[ "${sync_states}" == true ]]; then
     STATES_SRC_DIR="${SRC_DIR}/${STATES_FOLDER}"
     STATES_ARCHIVE="${STATES_DST_BASE_DIR}/${SALT_ROOT}.tgz"
 
-    qvm-run --pass-io ${QDOMAIN} "tar czf - -C ${STATES_SRC_DIR} ${SALT_ROOT}" > "${STATES_ARCHIVE}"
+    qvm-run --pass-io ${QUBE} "tar czf - -C ${STATES_SRC_DIR} ${SALT_ROOT}" > "${STATES_ARCHIVE}"
     tar xzf "${STATES_ARCHIVE}" -C "${STATES_DST_BASE_DIR}" && rm "${STATES_ARCHIVE}"
 
     # Enable states
