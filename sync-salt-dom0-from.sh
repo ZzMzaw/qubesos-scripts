@@ -14,16 +14,17 @@ declare -r OBJECT_TYPE_ALL="all"
 
 # Default values
 declare -r DEF_SALT_ROOT="myq"
+declare -r DEF_SALT_ENV="user"
 declare -r DEF_SRC_DIR="/home/user/Documents"
 
 # Configuration
 declare -r SALT_CONF_FOLDER="/etc/salt"
 declare -r PILLARS_FOLDER="qubesos-pillars"
-declare -r PILLARS_DST_BASE_DIR="/srv/pillar"
+declare -r PILLARS_DST_BASE_DIR="/srv/user_pillar"
 declare -r FORMULAS_FOLDER="qubesos-formulas"
-declare -r FORMULAS_DST_BASE_DIR="/srv/formulas"
+declare -r FORMULAS_DST_BASE_DIR="/srv/user_formulas"
 declare -r STATES_FOLDER="qubesos-states"
-declare -r STATES_DST_BASE_DIR="/srv/salt"
+declare -r STATES_DST_BASE_DIR="/srv/user_salt"
 
 #
 # UTILS
@@ -65,7 +66,7 @@ usage () {
 
 # \n is required to preserve whitespaces for the first line (and adding a new line before printing the usage message is a good deal)
     read -r -d '' USAGE << EOM
-\n    Usage: ${SCRIPT_NAME} <qube> [-o <object_type>] [-r <salt_root>] [-s <source>]
+\n    Usage: ${SCRIPT_NAME} <qube> [-o <object_type>] [-r <salt_root>] [-e <salt_env>] [-s <source>]
 
     Copy ${YELLOW}pillars${END}, ${YELLOW}formulas${END} and/or ${YELLOW}states${END} from ${BOLD}<qube>${END} to dom0 then enable them.
 
@@ -81,9 +82,13 @@ usage () {
                 - '${OBJECT_TYPE_ALL}': Synchronize both pillars and formulas (from their respective folders)
         
         -r|--salt-root ${BOLD}<salt_root>${END}
-            The Salt root name (default: '${SALT_ROOT}')
+            The Salt root name (default: '${DEF_SALT_ROOT}')
             Limited to alphanumeric, '.', '-' and '_' characters
             Must start by an alphabetic character
+        
+        -e|--salt-env ${BOLD}<salt_env>${END}
+            The Salt env (default: '${DEF_SALT_ENV}')
+            Limited to alphanumeric characters
         
         -s|--source ${BOLD}<source>${END}
             The path to pillars, formulas and states folders on qube ${BOLD}<qube>${END} (default: '${DEF_SRC_DIR}')
@@ -106,10 +111,14 @@ case "$1" in
     "-h"|"--help") usage && exit 0;;
 esac
 
-# Require root privileges
+# Check for root privileges
 if [[ "$EUID" -ne 0 ]]; then
-    print_error "Requires root privileges (please use sudo)" && usage && exit 1
+    print_error "Requires root privileges (please use ${CYAN}sudo${END})" && usage && exit 1
 fi
+
+# Check salt user folders are presents
+([[ ! -d /srv/user_salt ]] || [[ ! -d /srv/user_pillar ]] || [[ ! -d /srv/user_formulas ]]) && \
+print_error "Requires salt user folders (please run ${CYAN}sudo qubesctl state.sls qubes.user-dirs${END})" && usage && exit 1
 
 # Retrieve mandatory arguments
 if [[ $# -ge 1 ]]; then
@@ -138,6 +147,14 @@ while [[ -n "$1" ]]; do
                 print_error "Missing salt root after '$1'" && usage && exit 1
             fi
             ;;
+        "-e"|"--salt-env")
+            if [[ $# -ge 2 ]]; then
+                ARG_SALT_ENV="$2"
+                shift 2
+            else
+                print_error "Missing salt env after '$1'" && usage && exit 1
+            fi
+            ;;
         "-s"|"--source")
             if [[ $# -ge 2 ]]; then
                 ARG_SOURCE="$2"
@@ -154,6 +171,7 @@ done
 # Prepare options
 OBJECT_TYPE=${ARG_OBJECT_TYPE:-${OBJECT_TYPE_ALL}}
 SALT_ROOT=${ARG_SALT_ROOT:-${DEF_SALT_ROOT}}
+SALT_ENV=${ARG_SALT_ENV:-${DEF_SALT_ENV}}
 SRC_DIR=${ARG_SOURCE:-${DEF_SRC_DIR}}
 
 #
@@ -197,6 +215,9 @@ esac
 [[ "${SALT_ROOT}" =~ [^a-zA-Z0-9_.-]+ ]] && print_error "Invalid salt root (bad characters): '${SALT_ROOT}'" && usage && exit 1
 [[ "${SALT_ROOT}" =~ ^[^a-zA-Z] ]] && print_error "Invalid salt root (bad starting character): '${SALT_ROOT}'" && usage && exit 1
 
+# Validate SALT_ENV
+[[ "${SALT_ENV}" =~ [^a-zA-Z0-9]+ ]] && print_error "Invalid salt env (bad characters): '${SALT_ENV}'" && usage && exit 1
+
 # Validate SRC_DIR
 [[ "${SRC_DIR}" =~ [^a-zA-Z0-9\ /_.-]+ ]] && print_error "Invalid source (bad characters): '${SRC_DIR}'" && usage && exit 1
 [[ "${SRC_DIR}" =~ ^[^/] ]] && print_error "Invalid source (bad starting character): '${SRC_DIR}'" && usage && exit 1
@@ -214,7 +235,7 @@ if [[ "${sync_pillars}" == true ]]; then
     # Disable pillars
     print_sub_step "Disable pillars"
 
-    qubesctl top.disable "${SALT_ROOT}" pillar=true
+    qubesctl top.disable "${SALT_ROOT}" pillar=true saltenv="${SALT_ENV}"
 
     # Clean up pillars
     print_sub_step "Clean pillars"
@@ -233,7 +254,7 @@ if [[ "${sync_pillars}" == true ]]; then
     # Enable pillars
     print_sub_step "Enable pillars"
 
-    qubesctl top.enable "${SALT_ROOT}" pillar=true
+    qubesctl top.enable "${SALT_ROOT}" pillar=true saltenv="${SALT_ENV}"
 
 fi
 
@@ -271,7 +292,7 @@ if [[ "${sync_formulas}" == true ]]; then
     print_sub_step "Enable formulas"
 
     echo "file_roots:" > "${FORMULAS_CONFIG}"
-    echo "  base:" >> "${FORMULAS_CONFIG}"
+    echo "  ${SALT_ENV}:" >> "${FORMULAS_CONFIG}"
     for formula in ${FORMULAS_DST_DIR}/*; do
     echo "    - ${formula}" >> "${FORMULAS_CONFIG}"
     done
@@ -287,7 +308,7 @@ if [[ "${sync_states}" == true ]]; then
     # Disable states
     print_sub_step "Disable states"
 
-    qubesctl top.disable "${SALT_ROOT}"
+    qubesctl top.disable "${SALT_ROOT}" saltenv="${SALT_ENV}"
 
     # Clean up states
     print_sub_step "Clean states"
@@ -306,6 +327,6 @@ if [[ "${sync_states}" == true ]]; then
     # Enable states
     print_sub_step "Enable states"
 
-    qubesctl top.enable "${SALT_ROOT}"
+    qubesctl top.enable "${SALT_ROOT}" saltenv="${SALT_ENV}"
 
 fi
