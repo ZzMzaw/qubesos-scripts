@@ -86,7 +86,7 @@ usage () {
             Must start by an alphabetic character
         
         -s|--source ${BOLD}<source>${END}
-            The path to pillars, formulas and states folders on qube ${BOLD}<qube>${END} (default: '${SRC_DIR}')
+            The path to pillars, formulas and states folders on qube ${BOLD}<qube>${END} (default: '${DEF_SRC_DIR}')
             Limited to alphanumeric, '.', '-', '_', ' ' and '/' characters
             Must start by a '/' character (absolute path)
     
